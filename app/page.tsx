@@ -14,7 +14,7 @@ import { Play, Download, Settings } from 'lucide-react';
 
 export default function Home() {
   const [loaded, setLoaded] = useState(false);
-  const ffmpegRef = useRef(new FFmpeg());
+  const ffmpegRef = useRef<FFmpeg | null>(null);
   
   const [images, setImages] = useState<File[]>([]);
   const [audio, setAudio] = useState<File | null>(null);
@@ -35,6 +35,7 @@ export default function Home() {
 
   useEffect(() => {
     const loadFFmpeg = async () => {
+      ffmpegRef.current = new FFmpeg();
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
       const ffmpeg = ffmpegRef.current;
       await ffmpeg.load({
@@ -47,7 +48,7 @@ export default function Home() {
   }, []);
 
   const handleGenerate = async () => {
-    if (images.length === 0 || !audio) return;
+    if (images.length === 0 || !audio || !ffmpegRef.current) return;
     setIsProcessing(true);
     setVideoUrl(null);
     setProgress(0);
