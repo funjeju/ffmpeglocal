@@ -110,6 +110,6 @@ export async function renderVideo(opts: RenderOptions): Promise<string> {
   await ffmpeg.exec(args);
   
   const data = await ffmpeg.readFile('output.mp4');
-  const url = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: 'video/mp4' }));
+  const url = URL.createObjectURL(new Blob([data as Uint8Array], { type: 'video/mp4' }));
   return url;
 }
