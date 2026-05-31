@@ -18,6 +18,8 @@ export default function Home() {
   
   const [images, setImages] = useState<File[]>([]);
   const [audio, setAudio] = useState<File | null>(null);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [cta, setCta] = useState<File | null>(null);
   
   const [ratio, setRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [intensity, setIntensity] = useState<MotionIntensity>(2);
@@ -54,13 +56,26 @@ export default function Home() {
     setProgress(0);
     
     try {
+      const ffmpeg = ffmpegRef.current;
+
+      setMessage('Compressing audio for Whisper API (to avoid 4.5MB limit)...');
+      await ffmpeg.writeFile('input_audio', await fetchFile(audio));
+      await ffmpeg.exec(['-i', 'input_audio', '-ac', '1', '-ar', '16000', '-b:a', '16k', 'compressed.mp3']);
+      const compressedData = await ffmpeg.readFile('compressed.mp3');
+      const compressedBlob = new Blob([compressedData as Uint8Array], { type: 'audio/mp3' });
+
       setMessage('Generating subtitles with Whisper...');
-      const srtContent = await generateSubtitles(audio);
+      const srtContent = await generateSubtitles(compressedBlob);
       
       setMessage('Rendering video with FFmpeg...');
+      
+      const allImages = [...images];
+      if (thumbnail) allImages.unshift(thumbnail);
+      if (cta) allImages.push(cta);
+
       const url = await renderVideo({
         ffmpeg: ffmpegRef.current,
-        images,
+        images: allImages,
         audio,
         subtitleSrt: srtContent,
         ratio,
@@ -155,6 +170,12 @@ export default function Home() {
             </button>
 
             {isProcessing && <ProgressUI progress={progress} message={message} />}
+            {!isProcessing && message.startsWith('Error') && (
+              <div className="glass-panel" style={{ textAlign: 'center', color: '#f87171' }}>
+                <h3 style={{ marginBottom: '15px' }}>Generation Failed</h3>
+                <p>{message}</p>
+              </div>
+            )}
 
             {videoUrl && (
               <div className="glass-panel" style={{ textAlign: 'center' }}>
