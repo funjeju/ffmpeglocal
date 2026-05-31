@@ -111,7 +111,12 @@ export default function Home() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-            <UploadUI onImagesSelect={setImages} onAudioSelect={setAudio} />
+            <UploadUI 
+              onImagesSelect={setImages} 
+              onAudioSelect={setAudio} 
+              onThumbnailSelect={setThumbnail}
+              onCtaSelect={setCta}
+            />
             
             <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
