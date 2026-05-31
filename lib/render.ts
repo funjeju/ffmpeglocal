@@ -81,6 +81,13 @@ export async function renderVideo(opts: RenderOptions): Promise<string> {
   await ffmpeg.writeFile('audio.mp3', await fetchFile(audio));
   await ffmpeg.writeFile('subs.srt', srtContent);
   
+  // Load Korean Font (Crucial for preventing squares/tofu in FFmpeg subtitles)
+  try {
+    await ffmpeg.writeFile('font.ttf', await fetchFile('/font.ttf'));
+  } catch (e) {
+    console.warn("Could not load Korean font, subtitles might be broken");
+  }
+  
   let width = 1080;
   let height = 1920;
   if (ratio === '16:9') { width = 1920; height = 1080; }
@@ -122,9 +129,9 @@ export async function renderVideo(opts: RenderOptions): Promise<string> {
   if (subPos === 'center') alignment = 5;
 
   const assColor = hexToAssColor(subColor);
-  const subStyle = `Alignment=${alignment},FontSize=${subSize},PrimaryColour=${assColor}`;
+  const subStyle = `Alignment=${alignment},FontSize=${subSize},PrimaryColour=${assColor},Fontname=NotoSansCJKkr-VF`;
   
-  filterGraph += `[vout]subtitles=subs.srt:force_style='${subStyle}'[finalv]`;
+  filterGraph += `[vout]subtitles=subs.srt:fontsdir=/:force_style='${subStyle}'[finalv]`;
 
   // Build FFmpeg command arguments
   const inputArgs = [];
