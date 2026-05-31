@@ -14,6 +14,7 @@ export interface RenderOptions {
   subColor: string;
   subSize: number;
   subPos: 'top' | 'bottom' | 'center';
+  imageDuration: number;
   onProgress: (p: number) => void;
 }
 
@@ -28,7 +29,7 @@ function hexToAssColor(hex: string) {
 }
 
 export async function renderVideo(opts: RenderOptions): Promise<string> {
-  const { ffmpeg, images, audio, subtitleSrt, ratio, intensity, transition, subColor, subSize, subPos, onProgress } = opts;
+  const { ffmpeg, images, audio, subtitleSrt, ratio, intensity, transition, subColor, subSize, subPos, imageDuration, onProgress } = opts;
   
   // 1. Write files to FFmpeg memory
   for (let i = 0; i < images.length; i++) {
@@ -49,7 +50,7 @@ export async function renderVideo(opts: RenderOptions): Promise<string> {
   }
 
   // Calculate duration per image
-  const imgDuration = 3;
+  const imgDuration = imageDuration;
   const xfadeDuration = 1;
   const totalImgDuration = imgDuration + xfadeDuration;
   

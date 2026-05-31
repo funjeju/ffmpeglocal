@@ -21,6 +21,7 @@ export default function Home() {
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [cta, setCta] = useState<File | null>(null);
   
+  const [imageDuration, setImageDuration] = useState<number>(3);
   const [ratio, setRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [intensity, setIntensity] = useState<MotionIntensity>(2);
   const [transition, setTransition] = useState<TransitionType>('fade');
@@ -84,6 +85,7 @@ export default function Home() {
         subColor,
         subSize,
         subPos,
+        imageDuration,
         onProgress: (p) => setProgress(p)
       });
       
@@ -139,7 +141,17 @@ export default function Home() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: 'var(--text-muted)' }}>Image Duration</label>
+                  <select className="select-input" value={imageDuration} onChange={(e) => setImageDuration(Number(e.target.value))}>
+                    <option value={2}>2s</option>
+                    <option value={3}>3s</option>
+                    <option value={4}>4s</option>
+                    <option value={5}>5s</option>
+                    <option value={8}>8s</option>
+                  </select>
+                </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: 'var(--text-muted)' }}>Motion Intensity</label>
                   <select className="select-input" value={intensity} onChange={(e) => setIntensity(Number(e.target.value) as MotionIntensity)}>
