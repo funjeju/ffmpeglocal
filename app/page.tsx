@@ -62,7 +62,7 @@ export default function Home() {
       await ffmpeg.writeFile('input_audio', await fetchFile(audio));
       await ffmpeg.exec(['-i', 'input_audio', '-ac', '1', '-ar', '16000', '-b:a', '16k', 'compressed.mp3']);
       const compressedData = await ffmpeg.readFile('compressed.mp3');
-      const compressedBlob = new Blob([compressedData as Uint8Array], { type: 'audio/mp3' });
+      const compressedBlob = new Blob([compressedData as any], { type: 'audio/mp3' });
 
       setMessage('Generating subtitles with Whisper...');
       const srtContent = await generateSubtitles(compressedBlob);
