@@ -6,7 +6,8 @@ import { toBlobURL, fetchFile } from '@ffmpeg/util';
 import UploadUI from './components/UploadUI';
 import SubtitleUI from './components/SubtitleUI';
 import ProgressUI from './components/ProgressUI';
-import { generateSubtitles } from '@/lib/whisper';
+import ScriptImageMapper, { MappedSegment } from './components/ScriptImageMapper';
+import { generateSubtitles, WhisperSegment } from '@/lib/whisper';
 import { renderVideo } from '@/lib/render';
 import { MotionIntensity } from '@/lib/randomMotion';
 import { TransitionType, transitions } from '@/lib/transitions';
@@ -16,12 +17,12 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const ffmpegRef = useRef<FFmpeg | null>(null);
   
-  const [images, setImages] = useState<File[]>([]);
   const [audio, setAudio] = useState<File | null>(null);
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [cta, setCta] = useState<File | null>(null);
   
-  const [imageDuration, setImageDuration] = useState<number>(3);
+  const [segments, setSegments] = useState<WhisperSegment[]>([]);
+  const [mappedSegments, setMappedSegments] = useState<MappedSegment[]>([]);
   const [ratio, setRatio] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [intensity, setIntensity] = useState<MotionIntensity>(2);
   const [transition, setTransition] = useState<TransitionType>('fade');
@@ -50,42 +51,52 @@ export default function Home() {
     loadFFmpeg().catch(console.error);
   }, []);
 
-  const handleGenerate = async () => {
-    if (images.length === 0 || !audio || !ffmpegRef.current) return;
+  const handleAnalyze = async () => {
+    if (!audio || !ffmpegRef.current) return;
     setIsProcessing(true);
-    setVideoUrl(null);
     setProgress(0);
     
     try {
       const ffmpeg = ffmpegRef.current;
-
       setMessage('Compressing audio for Whisper API (to avoid 4.5MB limit)...');
       await ffmpeg.writeFile('input_audio', await fetchFile(audio));
       await ffmpeg.exec(['-i', 'input_audio', '-ac', '1', '-ar', '16000', '-b:a', '16k', 'compressed.mp3']);
       const compressedData = await ffmpeg.readFile('compressed.mp3');
       const compressedBlob = new Blob([compressedData as any], { type: 'audio/mp3' });
 
-      setMessage('Generating subtitles with Whisper...');
-      const srtContent = await generateSubtitles(compressedBlob);
-      
+      setMessage('Analyzing audio with Whisper...');
+      const extractedSegments = await generateSubtitles(compressedBlob);
+      setSegments(extractedSegments);
+      setMessage('');
+    } catch (err: any) {
+      console.error(err);
+      setMessage('Error: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (mappedSegments.length === 0 || !audio || !ffmpegRef.current) return;
+    setIsProcessing(true);
+    setVideoUrl(null);
+    setProgress(0);
+    
+    try {
       setMessage('Rendering video with FFmpeg...');
       
-      const allImages = [...images];
-      if (thumbnail) allImages.unshift(thumbnail);
-      if (cta) allImages.push(cta);
-
       const url = await renderVideo({
         ffmpeg: ffmpegRef.current,
-        images: allImages,
+        mappedSegments,
+        thumbnail,
+        cta,
         audio,
-        subtitleSrt: srtContent,
         ratio,
         intensity,
         transition,
         subColor,
         subSize,
         subPos,
-        imageDuration,
         onProgress: (p) => setProgress(p)
       });
       
@@ -114,11 +125,28 @@ export default function Home() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
             <UploadUI 
-              onImagesSelect={setImages} 
               onAudioSelect={setAudio} 
               onThumbnailSelect={setThumbnail}
               onCtaSelect={setCta}
             />
+            
+            {!segments.length && (
+              <button 
+                className="btn-primary" 
+                onClick={handleAnalyze} 
+                disabled={isProcessing || !audio}
+                style={{ padding: '16px', fontSize: '18px', backgroundColor: 'var(--primary)' }}
+              >
+                {isProcessing ? 'Analyzing...' : 'Analyze Audio Script'}
+              </button>
+            )}
+
+            {segments.length > 0 && (
+              <ScriptImageMapper 
+                segments={segments} 
+                onMappingChange={setMappedSegments} 
+              />
+            )}
             
             <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -141,17 +169,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: 'var(--text-muted)' }}>Image Duration</label>
-                  <select className="select-input" value={imageDuration} onChange={(e) => setImageDuration(Number(e.target.value))}>
-                    <option value={2}>2s</option>
-                    <option value={3}>3s</option>
-                    <option value={4}>4s</option>
-                    <option value={5}>5s</option>
-                    <option value={8}>8s</option>
-                  </select>
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: 'var(--text-muted)' }}>Motion Intensity</label>
                   <select className="select-input" value={intensity} onChange={(e) => setIntensity(Number(e.target.value) as MotionIntensity)}>
@@ -180,7 +198,7 @@ export default function Home() {
             <button 
               className="btn-primary" 
               onClick={handleGenerate} 
-              disabled={isProcessing || images.length === 0 || !audio}
+              disabled={isProcessing || mappedSegments.length === 0 || !audio}
               style={{ padding: '16px', fontSize: '18px' }}
             >
               <Play fill="currentColor" /> {isProcessing ? 'Processing...' : 'Generate Video'}

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     const openaiFormData = new FormData();
     openaiFormData.append('file', file, 'audio.mp3');
     openaiFormData.append('model', 'whisper-1');
-    openaiFormData.append('response_format', 'srt'); // SRT format for FFmpeg subtitles
+    openaiFormData.append('response_format', 'verbose_json');
 
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
@@ -32,10 +32,8 @@ export async function POST(req: Request) {
       throw new Error(`OpenAI API Error: ${errorText}`);
     }
 
-    const srtContent = await response.text();
-    return new NextResponse(srtContent, {
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    const jsonContent = await response.json();
+    return NextResponse.json(jsonContent);
   } catch (error: any) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

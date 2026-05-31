@@ -2,24 +2,24 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { MotionIntensity, getZoomPanFilter } from './randomMotion';
 import { TransitionType } from './transitions';
+import { MappedSegment } from '@/app/components/ScriptImageMapper';
 
 export interface RenderOptions {
   ffmpeg: FFmpeg;
-  images: File[];
+  mappedSegments: MappedSegment[];
   audio: File;
-  subtitleSrt: string;
+  thumbnail?: File | null;
+  cta?: File | null;
   ratio: '9:16' | '16:9' | '1:1';
   intensity: MotionIntensity;
   transition: TransitionType;
   subColor: string;
   subSize: number;
   subPos: 'top' | 'bottom' | 'center';
-  imageDuration: number;
   onProgress: (p: number) => void;
 }
 
 function hexToAssColor(hex: string) {
-  // Convert #RRGGBB to &H00BBGGRR
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return '&H00FFFFFF';
   const r = clean.substring(0, 2);
@@ -29,53 +29,95 @@ function hexToAssColor(hex: string) {
 }
 
 export async function renderVideo(opts: RenderOptions): Promise<string> {
-  const { ffmpeg, images, audio, subtitleSrt, ratio, intensity, transition, subColor, subSize, subPos, imageDuration, onProgress } = opts;
+  const { ffmpeg, mappedSegments, audio, thumbnail, cta, ratio, intensity, transition, subColor, subSize, subPos, onProgress } = opts;
   
-  // 1. Write files to FFmpeg memory
-  for (let i = 0; i < images.length; i++) {
-    await ffmpeg.writeFile(`img${i}.jpg`, await fetchFile(images[i]));
-  }
-  await ffmpeg.writeFile('audio.mp3', await fetchFile(audio));
-  await ffmpeg.writeFile('subs.srt', subtitleSrt);
+  // Extract sequential images and calculate their exact required durations
+  const timeline: { file: File, contribution: number }[] = [];
   
-  // Set output resolution based on ratio
-  let width = 1080;
-  let height = 1920;
-  if (ratio === '16:9') {
-    width = 1920;
-    height = 1080;
-  } else if (ratio === '1:1') {
-    width = 1080;
-    height = 1080;
+  // If thumbnail exists, we assign it a default duration (e.g. 3s)
+  if (thumbnail) {
+    timeline.push({ file: thumbnail, contribution: 3.0 });
   }
 
-  // Calculate duration per image
-  const imgDuration = imageDuration;
-  const xfadeDuration = 1;
-  const totalImgDuration = imgDuration + xfadeDuration;
+  // Iterate over segments
+  for (const seg of mappedSegments) {
+    if (seg.images.length === 0) continue;
+    const segmentDuration = seg.end - seg.start;
+    const durationPerImage = segmentDuration / seg.images.length;
+    for (const img of seg.images) {
+      timeline.push({ file: img, contribution: durationPerImage });
+    }
+  }
+
+  // If CTA exists, assign default duration
+  if (cta) {
+    timeline.push({ file: cta, contribution: 3.0 });
+  }
+
+  if (timeline.length === 0) throw new Error("No images mapped!");
+
+  // Generate SRT from segments
+  let srtContent = '';
+  // Since thumbnail adds 3 seconds to the beginning, all subtitle times need to be shifted by 3 seconds if thumbnail exists.
+  const timeOffset = thumbnail ? 3.0 : 0.0;
   
+  mappedSegments.forEach((seg, i) => {
+    const formatTime = (seconds: number) => {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      const ms = Math.floor((seconds % 1) * 1000);
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+    };
+    srtContent += `${i + 1}\n`;
+    srtContent += `${formatTime(seg.start + timeOffset)} --> ${formatTime(seg.end + timeOffset)}\n`;
+    srtContent += `${seg.text}\n\n`;
+  });
+
+  // Write files
+  for (let i = 0; i < timeline.length; i++) {
+    await ffmpeg.writeFile(`img${i}.jpg`, await fetchFile(timeline[i].file));
+  }
+  await ffmpeg.writeFile('audio.mp3', await fetchFile(audio));
+  await ffmpeg.writeFile('subs.srt', srtContent);
+  
+  let width = 1080;
+  let height = 1920;
+  if (ratio === '16:9') { width = 1920; height = 1080; }
+  else if (ratio === '1:1') { width = 1080; height = 1080; }
+
+  const xfadeDuration = 1.0;
   let filterGraph = "";
   
-  // Format and apply zoompan
-  for (let i = 0; i < images.length; i++) {
-    const zp = getZoomPanFilter(intensity, totalImgDuration, width, height);
+  // Calculate FFmpeg input duration (contribution + fade overlap)
+  for (let i = 0; i < timeline.length; i++) {
+    const isLast = i === timeline.length - 1;
+    // The input duration must be long enough to cover its own contribution AND the fade into the next image
+    const inputDuration = isLast ? timeline[i].contribution : timeline[i].contribution + xfadeDuration;
+    
+    // Safety check: ensure inputDuration is at least slightly longer than xfadeDuration
+    const safeInputDuration = Math.max(inputDuration, xfadeDuration + 0.1);
+    
+    const zp = getZoomPanFilter(intensity, safeInputDuration, width, height);
     filterGraph += `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},${zp},setsar=1[v${i}];`;
   }
 
-  // Xfade transition
-  if (images.length === 1) {
+  // Xfade transitions
+  if (timeline.length === 1) {
     filterGraph += `[v0]copy[vout];`;
   } else {
-    filterGraph += `[v0][v1]xfade=transition=${transition}:duration=${xfadeDuration}:offset=${imgDuration}[xf1];`;
-    for (let i = 2; i < images.length; i++) {
-      const currentOffset = imgDuration + ((imgDuration) * (i - 1));
+    let currentOffset = timeline[0].contribution;
+    filterGraph += `[v0][v1]xfade=transition=${transition}:duration=${xfadeDuration}:offset=${currentOffset}[xf1];`;
+    
+    for (let i = 2; i < timeline.length; i++) {
+      currentOffset += timeline[i-1].contribution;
       filterGraph += `[xf${i-1}][v${i}]xfade=transition=${transition}:duration=${xfadeDuration}:offset=${currentOffset}[xf${i}];`;
     }
-    filterGraph += `[xf${images.length - 1}]copy[vout];`;
+    filterGraph += `[xf${timeline.length - 1}]copy[vout];`;
   }
 
   // Subtitle styling
-  let alignment = 2; // bottom
+  let alignment = 2;
   if (subPos === 'top') alignment = 8;
   if (subPos === 'center') alignment = 5;
 
@@ -84,10 +126,13 @@ export async function renderVideo(opts: RenderOptions): Promise<string> {
   
   filterGraph += `[vout]subtitles=subs.srt:force_style='${subStyle}'[finalv]`;
 
-  // Build command arguments
+  // Build FFmpeg command arguments
   const inputArgs = [];
-  for (let i = 0; i < images.length; i++) {
-    inputArgs.push('-loop', '1', '-t', `${totalImgDuration}`, '-i', `img${i}.jpg`);
+  for (let i = 0; i < timeline.length; i++) {
+    const isLast = i === timeline.length - 1;
+    const inputDuration = isLast ? timeline[i].contribution : timeline[i].contribution + xfadeDuration;
+    const safeInputDuration = Math.max(inputDuration, xfadeDuration + 0.1);
+    inputArgs.push('-loop', '1', '-t', `${safeInputDuration}`, '-i', `img${i}.jpg`);
   }
   inputArgs.push('-i', 'audio.mp3');
 
@@ -95,7 +140,7 @@ export async function renderVideo(opts: RenderOptions): Promise<string> {
     ...inputArgs,
     '-filter_complex', filterGraph,
     '-map', '[finalv]',
-    '-map', `${images.length}:a`,
+    '-map', `${timeline.length}:a`,
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-pix_fmt', 'yuv420p',
