@@ -16,7 +16,7 @@ export default function UploadUI({ onImagesSelect, onAudioSelect, onThumbnailSel
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const selected = Array.from(e.target.files).slice(0, 20);
+      const selected = Array.from(e.target.files).slice(0, 100);
       setImages(selected);
       onImagesSelect(selected);
     }
@@ -76,7 +76,7 @@ export default function UploadUI({ onImagesSelect, onAudioSelect, onThumbnailSel
 
       <div>
         <h3 style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ImageIcon size={20} style={{ color: 'var(--primary)' }} /> Main Images (5-20)
+          <ImageIcon size={20} style={{ color: 'var(--primary)' }} /> Main Images (Up to 100)
         </h3>
         <label className="upload-area" style={{ display: 'block' }}>
           <input type="file" multiple accept="image/*" className="input-file" onChange={handleImageChange} />

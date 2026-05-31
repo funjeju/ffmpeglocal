@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
+import { toBlobURL, fetchFile } from '@ffmpeg/util';
 import UploadUI from './components/UploadUI';
 import SubtitleUI from './components/SubtitleUI';
 import ProgressUI from './components/ProgressUI';
