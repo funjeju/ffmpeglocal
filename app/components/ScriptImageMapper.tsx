@@ -41,6 +41,13 @@ export default function ScriptImageMapper({ segments, onMappingChange }: Props) 
     onMappingChange(newMapping);
   };
 
+  const updateSegmentText = (index: number, newText: string) => {
+    const newMapping = [...mapping];
+    newMapping[index].text = newText;
+    setMapping(newMapping);
+    onMappingChange(newMapping);
+  };
+
   const removeImage = (segmentIndex: number, imageIndex: number) => {
     const newImages = [...mapping[segmentIndex].images];
     newImages.splice(imageIndex, 1);
@@ -117,9 +124,23 @@ export default function ScriptImageMapper({ segments, onMappingChange }: Props) 
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px' }}>
               [{seg.start.toFixed(1)}s ~ {seg.end.toFixed(1)}s]
             </div>
-            <div style={{ fontSize: '16px', marginBottom: '15px', fontWeight: '500' }}>
-              {seg.text}
-            </div>
+            <textarea
+              value={seg.text}
+              onChange={(e) => updateSegmentText(i, e.target.value)}
+              style={{ 
+                width: '100%', 
+                backgroundColor: 'rgba(0,0,0,0.2)', 
+                color: 'var(--text)', 
+                border: '1px solid var(--border)', 
+                borderRadius: '6px', 
+                padding: '10px', 
+                fontSize: '15px', 
+                marginBottom: '15px', 
+                fontFamily: 'inherit', 
+                resize: 'vertical', 
+                minHeight: '60px' 
+              }}
+            />
             
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
               {seg.images.map((img, imgIdx) => (
