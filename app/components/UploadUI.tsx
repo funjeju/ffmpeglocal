@@ -52,7 +52,11 @@ export default function UploadUI({ onImagesSelect, onAudioSelect, onThumbnailSel
           </h3>
           <label className="upload-area" style={{ display: 'block', padding: '15px' }}>
             <input type="file" accept="image/*" className="input-file" onChange={handleThumbnailChange} />
-            <p style={{ fontSize: '14px' }}>{thumbnail ? thumbnail.name : 'Select Image'}</p>
+            {thumbnail ? (
+              <img src={URL.createObjectURL(thumbnail)} alt="Thumbnail" style={{ width: '100%', maxHeight: '100px', objectFit: 'cover', borderRadius: '4px' }} />
+            ) : (
+              <p style={{ fontSize: '14px' }}>Select Image</p>
+            )}
           </label>
         </div>
         <div>
@@ -61,7 +65,11 @@ export default function UploadUI({ onImagesSelect, onAudioSelect, onThumbnailSel
           </h3>
           <label className="upload-area" style={{ display: 'block', padding: '15px' }}>
             <input type="file" accept="image/*" className="input-file" onChange={handleCtaChange} />
-            <p style={{ fontSize: '14px' }}>{cta ? cta.name : 'Select Image'}</p>
+            {cta ? (
+              <img src={URL.createObjectURL(cta)} alt="CTA" style={{ width: '100%', maxHeight: '100px', objectFit: 'cover', borderRadius: '4px' }} />
+            ) : (
+              <p style={{ fontSize: '14px' }}>Select Image</p>
+            )}
           </label>
         </div>
       </div>
@@ -75,6 +83,13 @@ export default function UploadUI({ onImagesSelect, onAudioSelect, onThumbnailSel
           <UploadCloud size={32} style={{ margin: '0 auto 10px', color: 'var(--primary)' }} />
           <p>{images.length > 0 ? `${images.length} images selected` : 'Click or Drag images here'}</p>
         </label>
+        {images.length > 0 && (
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '15px', paddingBottom: '5px' }}>
+            {images.map((file, i) => (
+              <img key={i} src={URL.createObjectURL(file)} alt={`Img ${i}`} style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border)', flexShrink: 0 }} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
